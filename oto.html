@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Getiri Takip · Hisse (oto)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  :root{--ink:#17243A;--paper:#EDF0F3;--panel:#fff;--rise:#0E7C5B;--fall:#C0453C;--bench:#B07C22;--muted:#68748A;--hair:#D6DCE4}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:'Space Grotesk',system-ui,sans-serif}
+  .wrap{max-width:1100px;margin:0 auto;padding:24px 16px 60px}
+  .eyebrow{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+  h1{font-size:30px;margin:4px 0 0;letter-spacing:-.02em}
+  .panel{background:var(--panel);border:1px solid var(--hair);border-radius:10px}
+  .mono{font-family:'IBM Plex Mono',ui-monospace,monospace}
+  .kpis{display:flex;flex-wrap:wrap}
+  .kpi{flex:1;min-width:130px;padding:10px 14px;border-left:1px solid var(--hair)}
+  .kpi .v{font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:19px;margin-top:2px}
+  .kpi .s{font-size:11px;color:var(--muted)}
+  button{font:inherit;cursor:pointer;border-radius:8px;border:1px solid var(--ink);background:var(--ink);color:#fff;padding:8px 16px;font-weight:600;font-size:14px}
+  button.ikincil{background:transparent;color:var(--ink)}
+  button:disabled{opacity:.5;cursor:default}
+  .cubuk{display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:space-between;margin:18px 0 14px}
+  .not{font-size:11px;color:var(--muted);line-height:1.6;margin-top:22px}
+  .uyari{border-left:3px solid var(--bench);padding:10px 14px;margin:12px 0;font-size:13px;background:#fff}
+  .hata{border-left:3px solid var(--fall);padding:12px 14px;margin:12px 0;background:#fff;color:var(--fall);font-family:monospace;font-size:13px;white-space:pre-wrap}
+  table{border-collapse:collapse;width:100%;font-family:'IBM Plex Mono',monospace;font-size:13px}
+  th{font-family:'Space Grotesk';font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);text-align:left;padding:8px;border-bottom:1px solid var(--hair);white-space:nowrap}
+  td{padding:6px 8px;border-bottom:1px solid var(--hair);white-space:nowrap}
+  .sag{text-align:right}th.sag{text-align:right}
+  .yesil{color:var(--rise)}.kirmizi{color:var(--fall)}.soluk{color:var(--muted)}
+  .grafikPanel{padding:14px}
+  .lejant{display:flex;gap:14px;font-size:11px;color:var(--muted);font-family:'IBM Plex Mono',monospace;margin-top:6px;justify-content:center}
+  .lejant b{font-weight:600}
+  .seg{display:flex;border:1px solid var(--hair);border-radius:8px;overflow:hidden}
+  .seg button{border:none;border-radius:0;background:transparent;color:var(--muted);padding:6px 14px;font-size:12px}
+  .seg button.aktif{background:var(--ink);color:#fff}
+  #durum{font-size:12px;color:var(--muted);font-family:'IBM Plex Mono',monospace}
+  .grid2{display:grid;grid-template-columns:1fr;gap:16px}
+  @media(min-width:900px){.grid2{grid-template-columns:3fr 2fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="cubuk">
+    <div>
+      <div class="eyebrow">Getiri Takip · köprüden otomatik beslenir</div>
+      <h1>Yusuf — Hisse (oto)</h1>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center">
+      <span id="durum">yükleniyor…</span>
+      <div class="seg" id="paraSecim">
+        <button data-p="USD" class="aktif">$</button>
+        <button data-p="TL">₺</button>
+      </div>
+      <button id="yenile">Yenile</button>
+      <a href="./" style="text-decoration:none"><button class="ikincil">Ana sayfa</button></a>
+    </div>
+  </div>
+
+  <div id="icerik"></div>
+
+  <p class="not">
+    Veri akışı: ana tablon → Köprü (salt-okur özet) → bu sayfa. Değer serisi ana tablonun günlük otomatik kaydı;
+    TL çevrimi köprüdeki günlük USD/TRY kapanışıyla, akışların $ karşılığı işlem günü kuruyla hesaplanır (BBB yaklaşımı).
+    K/Z = Güncel değer − net dış nakit (temettü ve satış kârları otomatik içinde). TWR, günlük değer serisinin başladığı
+    tarihten itibarendir; XIRR tüm akışları kapsar. Bu sayfa ana getiri-takip verilerine dokunmaz — tamamen ayrı çalışır.
+  </p>
+</div>
+
+<script>
+const KOPRU = "https://docs.google.com/spreadsheets/d/1sqIge8sBoDFeUkotoSg73pRoxrCcc3uWje4f5IPqtTA/gviz/tq?tqx=out:csv&gid=0";
+let VERI = null, PARA = "USD";
+
+/* ————— yardımcılar ————— */
+const trSayi = (s) => {
+  if (s == null) return null;
+  s = String(s).trim(); if (!s || s.startsWith("#")) return null;
+  if (s.includes(",")) s = s.replace(/\./g, "").replace(",", ".");
+  const v = parseFloat(s);
+  return isFinite(v) ? v : null;
+};
+const trTarih = (s) => {
+  const m = String(s).match(/(\d{2})\.(\d{2})\.(\d{4})/);
+  return m ? `${m[3]}-${m[2]}-${m[1]}` : null;
+};
+const fmt = (v, p = PARA, d) => {
+  if (v == null || isNaN(v)) return "—";
+  const hane = d ?? (p === "TL" ? 0 : 2);
+  const n = new Intl.NumberFormat("tr-TR", { minimumFractionDigits: hane, maximumFractionDigits: hane }).format(v);
+  return p === "TL" ? n + " ₺" : "$" + n;
+};
+const fmtPct = (v, d = 1) => v == null || isNaN(v) ? "—" : (v > 0 ? "+" : "") + (v * 100).toFixed(d).replace(".", ",") + "%";
+const renk = (v) => v > 0 ? "yesil" : v < 0 ? "kirmizi" : "";
+const AYAD = ["Oca","Şub","Mar","Nis","May","Haz","Tem","Ağu","Eyl","Eki","Kas","Ara"];
+
+/* tırnak-duyarlı CSV ayrıştırıcı */
+function csvParse(metin) {
+  const satirlar = [];
+  let alan = "", satir = [], tirnak = false;
+  for (let i = 0; i < metin.length; i++) {
+    const c = metin[i];
+    if (tirnak) {
+      if (c === '"') { if (metin[i+1] === '"') { alan += '"'; i++; } else tirnak = false; }
+      else alan += c;
+    } else if (c === '"') tirnak = true;
+    else if (c === ",") { satir.push(alan); alan = ""; }
+    else if (c === "\n") { satir.push(alan); satirlar.push(satir); satir = []; alan = ""; }
+    else if (c !== "\r") alan += c;
+  }
+  if (alan || satir.length) { satir.push(alan); satirlar.push(satir); }
+  return satirlar;
+}
+
+/* ————— köprü verisini çöz ————— */
+function veriyiCoz(csv) {
+  const R = csvParse(csv);
+  const gunler = [], kur = [], girisler = [], cikislar = [];
+  for (let i = 1; i < R.length; i++) {
+    const r = R[i];
+    const t = trTarih(r[0]); const v = trSayi(r[1]);
+    if (t && v != null && v > 0) gunler.push({ t, usd: v });
+    const kt = trTarih(r[7]); const kv = trSayi(r[8]);
+    if (kt && kv != null && kv > 0) kur.push({ t: kt, v: kv });
+    const gt = trTarih(r[10]); const gv = trSayi(r[11]);
+    if (gt && gv != null) girisler.push({ t: gt, tl: gv });
+    const ct = trTarih(r[13]); const cv = trSayi(r[14]);
+    if (ct && cv != null) cikislar.push({ t: ct, tl: cv });
+  }
+  gunler.sort((a,b)=>a.t.localeCompare(b.t));
+  kur.sort((a,b)=>a.t.localeCompare(b.t));
+  const kurBul = (t) => {
+    let son = null;
+    for (const k of kur) { if (k.t <= t) son = k.v; else break; }
+    return son ?? (kur[0] && kur[0].v) ?? null;
+  };
+  gunler.forEach((g) => { const k = kurBul(g.t); g.kur = k; g.tl = k ? g.usd * k : null; });
+  const akislar = [
+    ...girisler.map((x) => ({ t: x.t, tl: x.tl, yon: 1 })),
+    ...cikislar.map((x) => ({ t: x.t, tl: -x.tl, yon: -1 })),
+  ].sort((a,b)=>a.t.localeCompare(b.t));
+  akislar.forEach((a) => { const k = kurBul(a.t); a.usd = k ? a.tl / k : null; });
+  return { gunler, akislar, kurBul, tersSayisi: akislar.filter((a) => Math.abs(a.tl) === 1).length };
+}
+
+/* ————— motor: aylık TWR + XIRR ————— */
+function xirr(cfs) {
+  if (cfs.length < 2) return null;
+  const d0 = cfs[0][0];
+  const f = (r) => cfs.reduce((s,[d,v]) => s + v / Math.pow(1 + r, (d - d0) / 31536e6), 0);
+  let lo = -0.95, hi = 49;
+  if (f(lo) * f(hi) > 0) return null;
+  for (let i = 0; i < 90; i++) { const m = (lo + hi) / 2; (f(m) > 0 ? lo = m : hi = m); }
+  return (lo + hi) / 2;
+}
+function hesapla(D, para) {
+  const g = D.gunler.filter((x) => (para === "TL" ? x.tl : x.usd) != null);
+  if (!g.length) return null;
+  const deger = (x) => para === "TL" ? x.tl : x.usd;
+  const akisDeger = (a) => para === "TL" ? a.tl : a.usd;
+
+  /* günlük seri */
+  const seri = g.map((x) => ({ t: x.t, v: deger(x) }));
+
+  /* aylar: her ayın son kaydı kapanış */
+  const ayMap = new Map();
+  g.forEach((x) => ayMap.set(x.t.slice(0, 7), x));
+  const aylar = [...ayMap.entries()].sort((a,b)=>a[0].localeCompare(b[0]))
+    .map(([key, x]) => ({ key, kapanis: deger(x) }));
+
+  /* TWR: seri başlangıcından itibaren, akışlar gün ağırlıklı */
+  const bas = g[0].t;
+  let bmv = deger(g[0]), twr = 1;
+  const seriAkis = D.akislar.filter((a) => a.t > bas && akisDeger(a) != null);
+  aylar.forEach((ay, i) => {
+    if (ay.key < bas.slice(0, 7)) return;
+    const oncekiKapanis = i === 0 ? deger(g[0]) : aylar[i-1].kapanis;
+    const bmvAy = ay.key === bas.slice(0,7) ? deger(g[0]) : oncekiKapanis;
+    const mf = seriAkis.filter((a) => a.t.slice(0,7) === ay.key);
+    const cf = mf.reduce((s,a) => s + akisDeger(a), 0);
+    const D_ = new Date(+ay.key.slice(0,4), +ay.key.slice(5,7), 0).getDate();
+    const w = cf !== 0 ? mf.reduce((s,a) => s + akisDeger(a) * (D_ - +a.t.slice(8)) , 0) / cf / D_ : 0;
+    const r = (ay.kapanis - bmvAy - cf) / (bmvAy + w * cf);
+    ay.ekleme = cf; ay.r = r; twr *= 1 + r; ay.twr = twr - 1;
+  });
+
+  /* XIRR + toplamlar: TÜM akışlar */
+  const tumAkis = D.akislar.filter((a) => akisDeger(a) != null);
+  const yatirilan = tumAkis.reduce((s,a) => s + akisDeger(a), 0);
+  const son = seri[seri.length - 1];
+  const cfs = [...tumAkis.map((a) => [new Date(a.t), -akisDeger(a)]), [new Date(son.t), son.v]];
+  const x = xirr(cfs);
+  return { seri, aylar: aylar.filter((a) => a.r != null), yatirilan, deger: son.v, sonTarih: son.t,
+    kz: son.v - yatirilan, twr: twr - 1, xirr: x, akislar: tumAkis };
+}
+
+/* ————— SVG günlük grafik ————— */
+function grafikSVG(seri, W = 1040, H = 260) {
+  if (seri.length < 2) return "";
+  const vs = seri.map((s) => s.v);
+  const min = Math.min(...vs), max = Math.max(...vs);
+  const pad = (max - min) * 0.06 || 1;
+  const y0 = min - pad, y1 = max + pad;
+  const X = (i) => 44 + (i / (seri.length - 1)) * (W - 60);
+  const Y = (v) => 12 + (1 - (v - y0) / (y1 - y0)) * (H - 40);
+  const yol = seri.map((s, i) => `${i ? "L" : "M"}${X(i).toFixed(1)},${Y(s.v).toFixed(1)}`).join("");
+  const alan = yol + `L${X(seri.length-1).toFixed(1)},${H-28}L${X(0).toFixed(1)},${H-28}Z`;
+  const cizgiler = [y0 + (y1-y0)*0.25, y0 + (y1-y0)*0.5, y0 + (y1-y0)*0.75].map((v) =>
+    `<line x1="44" x2="${W-16}" y1="${Y(v).toFixed(1)}" y2="${Y(v).toFixed(1)}" stroke="#D6DCE4" stroke-dasharray="2 4"/>
+     <text x="40" y="${(Y(v)+3).toFixed(1)}" text-anchor="end" font-size="9" fill="#68748A" font-family="IBM Plex Mono">${fmt(v, PARA, 0).replace("$","").replace(" ₺","")}</text>`).join("");
+  const sonNokta = `<circle cx="${X(seri.length-1).toFixed(1)}" cy="${Y(seri[seri.length-1].v).toFixed(1)}" r="3.5" fill="#17243A"/>`;
+  const t0 = seri[0].t.slice(8) + "." + seri[0].t.slice(5,7) + "." + seri[0].t.slice(2,4);
+  const t1 = seri[seri.length-1].t.slice(8) + "." + seri[seri.length-1].t.slice(5,7) + "." + seri[seri.length-1].t.slice(2,4);
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto">
+    ${cizgiler}
+    <path d="${alan}" fill="rgba(23,36,58,.06)"/>
+    <path d="${yol}" fill="none" stroke="#17243A" stroke-width="2"/>
+    ${sonNokta}
+    <text x="44" y="${H-10}" font-size="9" fill="#68748A" font-family="IBM Plex Mono">${t0}</text>
+    <text x="${W-16}" y="${H-10}" text-anchor="end" font-size="9" fill="#68748A" font-family="IBM Plex Mono">${t1}</text>
+  </svg>`;
+}
+
+/* ————— görünüm ————— */
+function ciz() {
+  const el = document.getElementById("icerik");
+  if (!VERI) { el.innerHTML = ""; return; }
+  const M = hesapla(VERI, PARA);
+  if (!M) { el.innerHTML = '<div class="hata">Bu para biriminde veri yok.</div>'; return; }
+  const uyari = VERI.tersSayisi ? `<div class="uyari">⚑ Tutarı 1 ₺ görünen ${VERI.tersSayisi} akış var — ana tabloda İşlem Geçmişi'nde o satırlarda Miktar↔Fiyat ters girilmiş. Düzeltince burası kendini günceller.</div>` : "";
+  const kpis = `
+    <div class="panel kpis">
+      <div class="kpi"><div class="eyebrow">Güncel değer</div><div class="v">${fmt(M.deger)}</div><div class="s">${M.sonTarih.split("-").reverse().join(".")}</div></div>
+      <div class="kpi"><div class="eyebrow">Net yatırılan</div><div class="v">${fmt(M.yatirilan)}</div><div class="s">${M.akislar.length} akış</div></div>
+      <div class="kpi"><div class="eyebrow">K/Z</div><div class="v ${renk(M.kz)}">${fmt(M.kz)}</div><div class="s">değer − yatırılan</div></div>
+      <div class="kpi"><div class="eyebrow">TWR (seri dönemi)</div><div class="v ${renk(M.twr)}">${fmtPct(M.twr)}</div><div class="s">${M.seri[0].t.split("-").reverse().join(".")}'ten beri</div></div>
+      <div class="kpi"><div class="eyebrow">XIRR (yıllık)</div><div class="v ${renk(M.xirr)}">${fmtPct(M.xirr)}</div><div class="s">tüm akışlar</div></div>
+    </div>`;
+  const grafik = `<div class="panel grafikPanel" style="margin-top:16px">
+      <div class="eyebrow">Günlük portföy değeri (${PARA === "TL" ? "₺" : "$"}) — ${M.seri.length} gün</div>
+      ${grafikSVG(M.seri)}
+    </div>`;
+  const ayTab = `<div class="panel" style="margin-top:16px;overflow-x:auto">
+    <table><thead><tr><th>Ay</th><th class="sag">Ekleme</th><th class="sag">Kapanış</th><th class="sag">Aylık %</th><th class="sag">TWR küm.</th></tr></thead>
+    <tbody>${[...M.aylar].reverse().map((a) => `<tr>
+      <td style="font-family:'Space Grotesk';font-weight:600">${AYAD[+a.key.slice(5,7)-1]} ${a.key.slice(2,4)}</td>
+      <td class="sag">${fmt(a.ekleme)}</td><td class="sag">${fmt(a.kapanis)}</td>
+      <td class="sag ${renk(a.r)}">${fmtPct(a.r)}</td><td class="sag">${fmtPct(a.twr)}</td></tr>`).join("")}
+    </tbody></table></div>`;
+  const akisTab = `<div class="panel" style="overflow-x:auto;max-height:420px;overflow-y:auto">
+    <table><thead><tr><th>Tarih</th><th>Tür</th><th class="sag">₺</th><th class="sag">$ (işlem günü kuru)</th></tr></thead>
+    <tbody>${[...M.akislar].reverse().map((a) => `<tr>
+      <td>${a.t.split("-").reverse().join(".")}</td>
+      <td class="${a.yon > 0 ? "yesil" : "kirmizi"}" style="font-family:'Space Grotesk';font-weight:600">${a.yon > 0 ? "Giriş" : "Çıkış"}</td>
+      <td class="sag">${fmt(Math.abs(a.tl), "TL")}</td><td class="sag">${fmt(Math.abs(a.usd), "USD")}</td></tr>`).join("")}
+    </tbody></table></div>`;
+  el.innerHTML = uyari + kpis + grafik + `<div class="grid2" style="margin-top:16px"><div>${ayTab}</div>${akisTab}</div>`;
+}
+
+async function yukle(zorla) {
+  const durum = document.getElementById("durum");
+  durum.textContent = "köprüden çekiliyor…";
+  try {
+    const r = await fetch(KOPRU + (zorla ? "&z=" + Date.now() : ""));
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const csv = await r.text();
+    if (csv.trimStart().startsWith("<")) throw new Error("Köprü paylaşımı kapalı görünüyor (HTML döndü).");
+    VERI = veriyiCoz(csv);
+    try { localStorage.setItem("oto-cache", csv); } catch {}
+    durum.textContent = "canlı ✓ " + new Date().toLocaleTimeString("tr-TR", {hour:"2-digit",minute:"2-digit"});
+    ciz();
+  } catch (e) {
+    const eski = (() => { try { return localStorage.getItem("oto-cache"); } catch { return null; } })();
+    if (eski) {
+      VERI = veriyiCoz(eski);
+      durum.textContent = "çevrimdışı — son kopya";
+      ciz();
+    } else {
+      document.getElementById("icerik").innerHTML =
+        `<div class="hata">Köprüye ulaşılamadı: ${String(e.message || e)}\n\nKöprü dosyasının paylaşımı "bağlantıya sahip herkes: görüntüleyen" olmalı.</div>`;
+      durum.textContent = "hata";
+    }
+  }
+}
+
+document.getElementById("yenile").onclick = () => yukle(true);
+document.querySelectorAll("#paraSecim button").forEach((b) => b.onclick = () => {
+  PARA = b.dataset.p;
+  document.querySelectorAll("#paraSecim button").forEach((x) => x.classList.toggle("aktif", x === b));
+  ciz();
+});
+yukle(false);
+</script>
+</body>
+</html>
